@@ -28,8 +28,8 @@ class Neurona(ABC):
     def Crear(self, *args, **kwargs):
         self.conexiones = []
         self.conexiones_entrantes = []
-        self.entrada = 0.0
-        self.valor = 0.0
+        self.entrada = 0
+        self.valor = 0
 
     def Liberar(self):
         for c in self.conexiones:
@@ -45,7 +45,7 @@ class Neurona(ABC):
 
     def Inicializar(self, valor: float):
         self.valor = valor
-        self.entrada = 0.0
+        self.entrada = 0
 
     @abstractmethod
     def Disparar(self):
@@ -132,7 +132,7 @@ class NeuronaEntrada(Neurona):
 
     def Disparar(self):
         self.valor = self.entrada
-        self.entrada = 0.0
+        self.entrada = 0
 
 
 class NeuronaMcCullochPitts(Neurona):

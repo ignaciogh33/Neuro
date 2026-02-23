@@ -6,6 +6,6 @@ ayuda_mp:
 	@echo "  fichero_salida   Fichero donde se guardaran los valores de todas las neuronas"
 
 ejecuta_mp:
-	python mp.py mp_files/entrada.txt mp_files/salida.txt
-	@echo "Resultado guardado en mp_files/salida.txt:"
-	@cat mp_files/salida.txt
+	python mp.py mp_files/entrada.txt mp_files/salida.csv
+	@echo "Resultado guardado en mp_files/salida.csv:"
+	@cat mp_files/salida.csv
