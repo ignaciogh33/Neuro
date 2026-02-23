@@ -1,4 +1,4 @@
-from p1.redes_neuronales import Red, Capa, NeuronaEntrada, NeuronaMcCullochPitts
+from src.redes_neuronales import Red, Capa, NeuronaEntrada, NeuronaMcCullochPitts
 import sys
 
 
