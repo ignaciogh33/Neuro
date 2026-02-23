@@ -57,22 +57,18 @@ def main():
     resultados = []
 
     for patron in patrones:
-        x1.entrada = patron[0]
-        x2.entrada = patron[1]
-        red.Disparar()
+        x1.Inicializar(patron[0])
+        x2.Inicializar(patron[1])
         resultados.append([x1.valor, x2.valor,
                            z1.valor, z2.valor, y1.valor, y2.valor])
         red.Propagar()
+        red.Disparar()
 
-    while True:
-        x1.entrada = 0
-        x2.entrada = 0
-        red.Disparar()
-        if z1.valor == 0 and z2.valor == 0 and y1.valor == 0 and y2.valor == 0:
-            break
+    for _ in range(len(red.capas) - 1):
         resultados.append([x1.valor, x2.valor,
                            z1.valor, z2.valor, y1.valor, y2.valor])
         red.Propagar()
+        red.Disparar()
 
     with open(salida, 'w', newline='') as f:
         writer = csv.writer(f, delimiter=' ')
