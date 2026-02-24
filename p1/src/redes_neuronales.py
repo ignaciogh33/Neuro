@@ -127,9 +127,6 @@ class Red:
 
 class NeuronaEntrada(Neurona):
 
-    def Crear(self):
-        super().Crear()
-
     def Disparar(self):
         self.valor = self.entrada
         self.entrada = 0
