@@ -1,0 +1,33 @@
+### 4.1.1. Memoria
+
+**1. Fronteras de decisión de cada algoritmo**
+
+*(Nota: Ejecuta tu script `entrenar_logicos.py` y sustituye los valores literales de W1, W2 y b por los números que devuelva la terminal)*
+
+*   **Problema AND:**
+    *   Perceptrón: $W_{1,p} \cdot x_1 + W_{2,p} \cdot x_2 + b_p = 0$ 
+    *   Adaline: $W_{1,a} \cdot x_1 + W_{2,a} \cdot x_2 + b_a = 0$
+*   **Problema OR:**
+    *   Perceptrón: $W_{1,p} \cdot x_1 + W_{2,p} \cdot x_2 + b_p = 0$
+    *   Adaline: $W_{1,a} \cdot x_1 + W_{2,a} \cdot x_2 + b_a = 0$
+*   **Problema NAND:**
+    *   Perceptrón: $W_{1,p} \cdot x_1 + W_{2,p} \cdot x_2 + b_p = 0$
+    *   Adaline: $W_{1,a} \cdot x_1 + W_{2,a} \cdot x_2 + b_a = 0$
+*   **Problema XOR:**
+    *   Perceptrón: No converge (es imposible encontrar una frontera lineal).
+    *   Adaline: No converge (mismo motivo).
+
+**2. ¿Es posible solucionar todos los problemas?**
+
+No, no es posible solucionar todos los problemas lógicos utilizando un Perceptrón simple o una neurona Adaline simple.
+
+**¿Cuál es el problema que no es posible?**
+
+El problema que no es posible solucionar es el **XOR** (O exclusivo). El motivo fundamental es que tanto el Perceptrón como Adaline son modelos lineales. Matemáticamente, esto significa que solo pueden clasificar conjuntos en los que se pueda trazar un hiperplano (una línea recta en nuestro espacio bidimensional de 2 entradas) que separe completamente la clase positiva de la negativa. El problema XOR no es **linealmente separable**.
+
+**¿Cómo podría solucionarse?**
+
+Existen principalmente dos formas de solucionar la incapacidad de las neuronas lineales para resolver el XOR u otros problemas no linealmente separables:
+
+1.  **Redes Neuronales Multicapa (Perceptrón Multicapa - MLP):** Introduciendo neuronas conectadas en capas ocultas con funciones de activación no lineales (como la función escalón, sigmoide o ReLU). Al combinar varias neuronas, la red es capaz de mapear fronteras de decisión muy complejas formadas por la intersección de varios hiperplanos.
+2.  **Aumento de dimensionalidad (Feature Engineering):** Añadiendo dimensiones artificiales previas a la entrada de la red neuronal mediante operaciones polinómicas (por ejemplo, creando una tercera entrada equivalente a $x_3 = x_1 \cdot x_2$). De este modo, los datos pueden volverse linealmente separables en el nuevo espacio de características de mayor dimensión.

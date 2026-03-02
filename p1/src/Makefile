@@ -9,3 +9,7 @@ ejecuta_mp:
 	python mp.py mp_files/entrada.txt mp_files/salida.csv
 	@echo "Resultado guardado en mp_files/salida.csv:"
 	@cat mp_files/salida.csv
+
+ejecuta_logicos:
+	python entrenar_logicos.py
+
