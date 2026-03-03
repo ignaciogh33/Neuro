@@ -1,4 +1,4 @@
-PYTHON = ../.venv/bin/python
+PYTHON = python
 
 ayuda_mp:
 	@echo "Uso: $(PYTHON) mp.py <fichero_entrada> <fichero_salida>"
