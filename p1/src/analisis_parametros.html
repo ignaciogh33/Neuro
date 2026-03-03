@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Influencia de Parámetros en Redes Neuronales</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #000;
+            max-width: 800px;
+            margin: auto;
+        }
+
+        h3 {
+            color: #2E74B5;
+            border-bottom: 2px solid #2E74B5;
+            padding-bottom: 5px;
+        }
+
+        h4 {
+            color: #2E74B5;
+            margin-bottom: 0.5em;
+            margin-top: 1.5em;
+        }
+
+        ul {
+            margin-top: 0;
+        }
+
+        p {
+            margin-bottom: 1em;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        .grafica-placeholder {
+            background-color: #f0f0f0;
+            border: 2px dashed #999;
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            color: #555;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h3>Análisis de la Influencia de Parámetros: Perceptrón y Adaline</h3>
+
+    <p>A continuación se analiza, utilizando el dataset <strong>problema_real1</strong> en <strong>Modo 1</strong>, cómo
+        repercute el cambio individual de los parámetros de control sobre el rendimiento de las redes (Precisión Test y
+        Error Cuadrático Medio o ECM). Para mitigar el efecto de la aleatoriedad inducida al dividir los conjuntos de
+        Entrenamiento y Validación, cada configuración de parámetros ha sido evaluada iterativamente, calculándose
+        promedios para trazar el comportamiento genérico del modelo.</p>
+
+    <h4>1. Análisis del Perceptrón Simple</h4>
+    <p>El Perceptrón utiliza una regla de aprendizaje discreta orientada a clasificar los datos separados mediante
+        fronteras lineales preestableciéndose una penalización por fallos discretos (no evalúa la magnitud numérica del
+        error, sino el acierto binario). Su optimidad suele estar regida puramente por la <strong>tasa de aprendizaje
+            (alfa)</strong>.</p>
+
+    <h5>A) Influencia de la Tasa de Aprendizaje (alfa)</h5>
+    <div class="grafica-placeholder">
+        [INSERTAR AQUÍ LA IMAGEN: graficas/perceptron_alfa.png] <br>
+        <em>Figura 1: Evolución de precisión y ECM en el Perceptrón modificando el parámetro Alfa.</em>
+    </div>
+    <p>Tal y como se observa en la gráfica, valores muy bajos de la tasa de aprendizaje demoran el posicionamiento
+        óptimo de los hiperplanos sin lograr la convergencia en el tiempo fijado. Existe un valor óptimo (en la gráfica,
+        cercano a 0.1) que posiciona el modelo en su pico máximo de generalización (~93%). Si aumentamos el alfa
+        excesivamente (0.3 - 0.5), el algoritmo produce <em>"overshooting"</em>; los ajustes de peso se vuelven tan
+        agresivos que la frontera oscila rebotando de manera continua, resultando en caídas de precisión significativas
+        acompañadas de un incremento en la varianza (inestabilidad del modelo).</p>
+
+    <h5>B) Influencia del Umbral</h5>
+    <div class="grafica-placeholder">
+        [INSERTAR AQUÍ LA IMAGEN: graficas/perceptron_umbral.png] <br>
+        <em>Figura 2: Evolución de precisión y ECM en el Perceptrón modificando el Umbral.</em>
+    </div>
+    <p>A efectos funcionales, el parámetro de umbral representa qué tan fuerte debe ser la estimulación para superar el
+        nodo. Al analizar su influencia sobre el Perceptrón en este problema, se desprende que el rendimiento se
+        mantiene prácticamente plano y robusto (rondando el 91-92% de precisión general en casi toda la ventana).
+        Modificar este escalar no perturba drásticamente el modelo, puesto que sus efectos quedan compensados o
+        "canibalizados" durante la adaptación iterativa del término estático del bias (sesgo) por la propia regla del
+        algoritmo.</p>
+
+    <h5>C) Influencia del Sesgo Inicial (b)</h5>
+    <div class="grafica-placeholder">
+        [INSERTAR AQUÍ LA IMAGEN: graficas/perceptron_sesgo.png] <br>
+        <em>Figura 3: Evolución de precisión y ECM en el Perceptrón modificando el Sesgo Inicial.</em>
+    </div>
+    <p>El sesgo es equivalente al origen de coordenadas de la superficie de decisión de cada clase. Las gráficas nos
+        demuestran que este valor inicial presenta escasa sensibilidad siempre y cuando se inicialice a valores
+        razonablemente equilibrados. Cuando se fuerza de forma externa un límite extremo positivo (por ejemplo, valor =
+        1.0), el modelo demanda interacciones extra para contrarrestar este valor mal implantado antes de estabilizar la
+        pendiente. Esto desemboca en una sutil y paulatina merma en la precisión y subida de ECM si el entrenamiento
+        sufre interrupciones temporales prematuras u ocasiona un desfase de adaptación.</p>
+
+
+    <h4>2. Análisis del ADALINE</h4>
+    <p>A diferencia del algoritmo clásico previo, un filtro adaptativo ADALINE minimiza rigurosamente una función
+        cuadrática diferencial, es decir, ataca de forma nativa la reducción del Error Cuadrático Medio. Sus salidas de
+        entrenamiento son continuas, volviéndolo más confiable, pero al mismo tiempo su convergencia exige de una
+        sincronía y selección de parámetros más quirúrgica.</p>
+
+    <h5>A) Influencia de la Tasa de Aprendizaje (alfa)</h5>
+    <div class="grafica-placeholder">
+        [INSERTAR AQUÍ LA IMAGEN: graficas/adaline_alfa.png] <br>
+        <em>Figura 4: Evolución de precisión y ECM en el Adaline modificando el parámetro Alfa.</em>
+    </div>
+    <p>El parámetro <strong>Alfa es el elemento crítico indiscutible en la arquitectura Adaline</strong>. Observemos la
+        gráfica: fijando valores iniciales exiguamente pequeños (0.001), la red "gatea" en vez de avanzar, resultando
+        totalmente inoperativa durante el límite impuesto, estancándose en una ratio aleatorio (inferior al 50% de
+        precisión). Superado el nivel de inoperancia adaptativa (en este caso 0.01 y consiguientes), las derivadas
+        empujan rápida y agresivamente al sistema escalando el porcentaje de generalización hasta una precisión
+        sumamente robusta (entorno al 95-96%) acompañado simultáneamente del decrecimiento drástico del ECM. Pasarse
+        artificialmente de esta cota introduciría perturbaciones idénticas a las explicadas en el perceptrón general,
+        impidiendo descender por el radiante adecuadamente.</p>
+
+    <h5>B) Influencia de la Tolerancia de Convergencia</h5>
+    <div class="grafica-placeholder">
+        [INSERTAR AQUÍ LA IMAGEN: graficas/adaline_tolerancia.png] <br>
+        <em>Figura 5: Evolución de precisión y ECM en el Adaline modificando la Tolerancia de Convergencia.</em>
+    </div>
+    <p>El margen de tolerancia en el Adaline estipula su criterio de parada ("romper a finalizar si el cambio es menor a
+        T"). Analizando la tendencia, si flexibilizamos el criterio exigido haciéndolo un valor alto, propiciamos que el
+        algoritmo identifique un entorno falso de reposo y finalice la búsqueda de mínimos mucho antes. Esto nos cobra
+        una "multa" visible: la línea desciende su precisión global hacia el 92% perdiendo el fine-tuning o acabado
+        perfecto. Mantener umbrales matemáticos agresivos y pequeños nos ofrece los mejores estados de generalización al
+        precio de mayor consumo algorítmico global o penalización cronológica.</p>
+
+    <h5>C) Influencia del Sesgo Inicial (b)</h5>
+    <div class="grafica-placeholder">
+        [INSERTAR AQUÍ LA IMAGEN: graficas/adaline_sesgo.png] <br>
+        <em>Figura 6: Evolución de precisión y ECM en el Adaline modificando el Sesgo Inicial.</em>
+    </div>
+    <p>Acorde a la arquitectura robusta analítica de la red, iniciar asimétricamente el valor b (sesgo) no arrastra
+        ninguna penalización evidente. Observamos un trazado hermético y horizontal con eficacias en el 95-96% para
+        cualquier variación del parámetro. El propio gradiente es suficiente para autocorregir un origen de coordenadas
+        sesgado de forma íntegra sin presentar lastre computacional que mine el aprendizaje final, al menos dentro de
+        ecosistemas dimensionales y ventanas temporales holgadas.</p>
+
+</body>
+
+</html>
