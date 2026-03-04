@@ -1,0 +1,8 @@
+problema,red,w1,w2,sesgo,converge
+AND,adaline,0.346257,0.454909,-0.797469,True
+
+x1,x2,esperado,obtenido
+1.0,1.0,1,1
+1.0,0.0,-1,-1
+0.0,1.0,-1,-1
+0.0,0.0,-1,-1

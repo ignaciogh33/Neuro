@@ -1,0 +1,8 @@
+problema,red,w1,w2,sesgo,converge
+AND,perceptron,2.000000,3.000000,-4.000000,True
+
+x1,x2,esperado,obtenido
+1.0,1.0,1,1
+1.0,0.0,-1,-1
+0.0,1.0,-1,-1
+0.0,0.0,-1,-1

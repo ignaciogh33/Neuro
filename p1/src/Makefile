@@ -45,3 +45,11 @@ ayuda_adaline:
 
 ejecuta_adaline:
 	$(PYTHON) adaline.py --fichero P1/problema_real1.txt --porcentaje 0.7 --alfa 0.01 --tolerancia 0.01 --sesgo 0.0 --timeout 10
+
+ejecuta_perceptron_pr2:
+	$(PYTHON) perceptron_pr2.py
+
+ejecuta_adaline_pr2:
+	$(PYTHON) adaline_pr2.py
+
+ejecuta_pr2: ejecuta_perceptron_pr2 ejecuta_adaline_pr2
