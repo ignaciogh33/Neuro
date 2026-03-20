@@ -521,19 +521,22 @@ def leer3(fichero_de_entrenamiento: str, fichero_de_test: str):
 
 
 def _evaluar_conjunto(red: Red, entradas: np.ndarray,
-                      salidas_deseadas: np.ndarray) -> tuple:
+                      salidas_deseadas: np.ndarray,
+                      calcular_matriz: bool = False) -> tuple:
     """
-    Evalúa la red sobre un conjunto de patrones y calcula:
-        - ECM (Error Cuadrático Medio): suma de errores cuadráticos
-          dividida entre el número de patrones por el número de salidas.
-        - Tasa de aciertos: fracción de patrones clasificados correctamente
-          (clase predicha = argmax de salida, clase real = argmax de etiqueta).
-    Devuelve: (ecm, tasa_aciertos).
+    Evalúa la red sobre un conjunto de patrones en un único recorrido y calcula:
+        - ECM (Error Cuadrático Medio).
+        - Tasa de aciertos.
+        - Matriz de confusión (opcional, filas: clase real, columnas: clase predicha).
+    Si calcular_matriz es False devuelve: (ecm, tasa_aciertos).
+    Si calcular_matriz es True  devuelve: (ecm, tasa_aciertos, matriz_confusion).
     """
     n_salidas = salidas_deseadas.shape[1]
     n_patrones = len(entradas)
     ecm_total = 0.0
     aciertos = 0
+    mc = np.zeros((n_salidas, n_salidas),
+                  dtype=np.int32) if calcular_matriz else None
 
     for p in range(n_patrones):
         salida = red.CalcularSalida(entradas[p])
@@ -546,28 +549,12 @@ def _evaluar_conjunto(red: Red, entradas: np.ndarray,
         clase_real = int(np.argmax(t))
         if clase_pred == clase_real:
             aciertos += 1
+        if calcular_matriz:
+            mc[clase_real, clase_pred] += 1
 
     ecm = ecm_total / (n_patrones * n_salidas)
     tasa = aciertos / n_patrones
-    return ecm, tasa
-
-
-def _matriz_confusion(red: Red, entradas: np.ndarray,
-                      salidas_deseadas: np.ndarray) -> np.ndarray:
-    """
-    Calcula la matriz de confusión de la red sobre un conjunto de patrones.
-    Filas: clase real (argmax de la etiqueta).
-    Columnas: clase predicha (argmax de la salida de la red).
-    Devuelve una matriz de enteros de forma (n_clases x n_clases).
-    """
-    n_salidas = salidas_deseadas.shape[1]
-    mc = np.zeros((n_salidas, n_salidas), dtype=np.int32)
-    for p in range(len(entradas)):
-        salida = red.CalcularSalida(entradas[p])
-        clase_pred = int(np.argmax(salida))
-        clase_real = int(np.argmax(salidas_deseadas[p]))
-        mc[clase_real, clase_pred] += 1
-    return mc
+    return (ecm, tasa, mc) if calcular_matriz else (ecm, tasa)
 
 
 def retropropagacion(red: Red, entradas_train: np.ndarray,
@@ -634,16 +621,21 @@ def retropropagacion(red: Red, entradas_train: np.ndarray,
                 for c in neuronas_ocultas[j].conexiones_entrantes:
                     c.peso += alfa_dj * c.neurona_origen.valor
 
-        historial_train.append(_evaluar_conjunto(
-            red, entradas_train, salidas_deseadas_train
-        ))
+        if epoca < epocas - 1:
+            historial_train.append(_evaluar_conjunto(
+                red, entradas_train, salidas_deseadas_train
+            ))
+            historial_test.append(_evaluar_conjunto(
+                red, entradas_test, salidas_deseadas_test
+            ))
 
-        historial_test.append(_evaluar_conjunto(
-            red, entradas_test, salidas_deseadas_test
-        ))
-
-    mc_train = _matriz_confusion(red, entradas_train, salidas_deseadas_train)
-    mc_test = _matriz_confusion(red, entradas_test, salidas_deseadas_test)
+    # Última época: ECM, tasa y matriz de confusión en un único recorrido
+    ecm_tr, tasa_tr, mc_train = _evaluar_conjunto(
+        red, entradas_train, salidas_deseadas_train, calcular_matriz=True)
+    ecm_te, tasa_te, mc_test = _evaluar_conjunto(
+        red, entradas_test,  salidas_deseadas_test,  calcular_matriz=True)
+    historial_train.append((ecm_tr, tasa_tr))
+    historial_test.append((ecm_te, tasa_te))
 
     return historial_train, historial_test, mc_train, mc_test
 
