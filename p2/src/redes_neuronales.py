@@ -569,9 +569,9 @@ def retropropagacion(red: Red, entradas_train: np.ndarray,
     Por cada época:
       1. Para cada patrón de entrenamiento realiza feedforward y calcula:
            - delta_k para cada neurona de salida: (t_k - y_k) * f'(y_k)
-           - Actualiza pesos y sesgos de la capa de salida.
            - delta_j para cada neurona oculta: (Σ delta_k * w_jk) * f'(z_j)
            - Actualiza pesos y sesgos de la capa oculta.
+           - Actualiza pesos y sesgos de la capa de salida.
       2. Evalúa ECM y tasa de aciertos sobre train y test,
          almacenando los resultados en los historiales.
 
@@ -591,6 +591,7 @@ def retropropagacion(red: Red, entradas_train: np.ndarray,
     n_salidas = len(neuronas_salida)
 
     delta_k = np.empty(n_salidas)
+    delta_w_salida = np.empty((n_salidas, n_ocultas + 1))
     idx_salida = {n: k for k, n in enumerate(neuronas_salida)}
 
     for epoca in range(epocas):
@@ -606,9 +607,10 @@ def retropropagacion(red: Red, entradas_train: np.ndarray,
                 y_k = n_k.valor
                 delta_k[k] = (t[k] - y_k) * derivada_sigmoide_bipolar(y_k)
                 alfa_dk = alfa * delta_k[k]
-                n_k.sesgo += alfa_dk
-                for c in n_k.conexiones_entrantes:
-                    c.peso += alfa_dk * c.neurona_origen.valor
+                delta_w_salida[k, 0] = alfa_dk                          # sesgo
+                for ci, c in enumerate(n_k.conexiones_entrantes):
+                    delta_w_salida[k, ci + 1] = alfa_dk * \
+                        c.neurona_origen.valor  # pesos
 
             for j in range(n_ocultas):
                 delta_in_j = 0.0
@@ -620,6 +622,12 @@ def retropropagacion(red: Red, entradas_train: np.ndarray,
                 neuronas_ocultas[j].sesgo += alfa_dj
                 for c in neuronas_ocultas[j].conexiones_entrantes:
                     c.peso += alfa_dj * c.neurona_origen.valor
+
+            for k in range(n_salidas):
+                n_k = neuronas_salida[k]
+                n_k.sesgo += delta_w_salida[k, 0]
+                for ci, c in enumerate(n_k.conexiones_entrantes):
+                    c.peso += delta_w_salida[k, ci + 1]
 
         if epoca < epocas - 1:
             historial_train.append(_evaluar_conjunto(
