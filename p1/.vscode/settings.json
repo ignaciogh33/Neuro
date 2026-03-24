@@ -1,0 +1,10 @@
+{
+    "python.envFile": "${workspaceFolder}/.venv",
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/src",
+    ],
+    "basedpyright.analysis.typeCheckingMode": "basic",
+    "basedpyright.analysis.diagnosticSeverityOverrides": {
+        "reportAttributeAccessIssue": "none"
+    }
+}

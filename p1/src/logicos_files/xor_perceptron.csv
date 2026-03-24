@@ -1,8 +1,8 @@
 problema,red,w1,w2,sesgo,converge
-XOR,perceptron,0.000000,-1.000000,0.000000,False
+XOR,perceptron,0.000000,0.000000,0.000000,False
 
 x1,x2,esperado,obtenido
-1.0,1.0,-1,-1
+1.0,1.0,-1,0
 1.0,0.0,1,0
-0.0,1.0,1,-1
+0.0,1.0,1,0
 0.0,0.0,-1,0
