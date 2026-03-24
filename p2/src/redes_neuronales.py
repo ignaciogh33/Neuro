@@ -1,8 +1,21 @@
+import math
 import random
 from abc import ABC, abstractmethod
 
 import numpy as np
 import pandas as pd
+
+
+def sigmoide_bipolar(x: float) -> float:
+    """Función de activación sigmoide bipolar. Devuelve valores en el rango (-1, 1)."""
+    return 2.0 / (1.0 + math.exp(-x)) - 1.0
+
+
+def derivada_sigmoide_bipolar(fx: float) -> float:
+    """Derivada de la sigmoide bipolar expresada en función de su propia salida fx.
+    Permite calcular el gradiente de forma eficiente sin recalcular la exponencial.
+    """
+    return 0.5 * (1.0 + fx) * (1.0 - fx)
 
 
 class Conexion:
@@ -186,6 +199,20 @@ class Red:
         """Propaga las señales de todas las capas de la red secuencialmente."""
         for capa in self.capas:
             capa.Propagar()
+
+    def CalcularSalida(self, patron: np.ndarray) -> np.ndarray:
+        """
+        Realiza el paso feedforward completo para un patrón de entrada.
+        1. Inicializa cada neurona de la capa de entrada con el valor del patrón.
+        2. Propaga y dispara capa a capa hasta la capa de salida.
+        Devuelve un array NumPy con los valores de las neuronas de salida.
+        """
+        for i, neurona in enumerate(self.capas[0].neuronas):
+            neurona.Inicializar(patron[i])
+        for c in range(len(self.capas) - 1):
+            self.capas[c].Propagar()
+            self.capas[c + 1].Disparar()
+        return np.array([n.valor for n in self.capas[-1].neuronas])
 
 
 class NeuronaEntrada(Neurona):
@@ -410,6 +437,28 @@ class NeuronaAdaline(Neurona):
         self.en_entrenamiento = False
 
 
+class NeuronaSigmoide(Neurona):
+    """
+    Neurona con función de activación sigmoide bipolar.
+    Produce salidas continuas en el rango (-1, 1).
+    Se utiliza en capas ocultas y de salida del MLP con retropropagación.
+    """
+
+    def Crear(self, sesgo: float):
+        """Inicializa la neurona con el sesgo (bias) dado."""
+        super().Crear()
+        self.sesgo = sesgo
+
+    def Disparar(self):
+        """
+        Calcula la entrada neta (suma ponderada + sesgo) y aplica la función
+        sigmoide bipolar para obtener la salida en el rango (-1, 1).
+        Reinicia el acumulador de entrada tras disparar.
+        """
+        self.valor = sigmoide_bipolar(self.entrada + self.sesgo)
+        self.entrada = 0.0
+
+
 def parsear_fichero(fichero: str):
     """
     Lee un fichero de datos con el formato:
@@ -469,3 +518,192 @@ def leer3(fichero_de_entrenamiento: str, fichero_de_test: str):
     entradas_test, salidas_test = parsear_fichero(fichero_de_test)
 
     return entradas_entrenamiento, salidas_entrenamiento, entradas_test, salidas_test
+
+
+def _evaluar_conjunto(red: Red, entradas: np.ndarray,
+                      salidas_deseadas: np.ndarray,
+                      calcular_matriz: bool = False) -> tuple:
+    """
+    Evalúa la red sobre un conjunto de patrones en un único recorrido y calcula:
+        - ECM (Error Cuadrático Medio).
+        - Tasa de aciertos.
+        - Matriz de confusión (opcional, filas: clase real, columnas: clase predicha).
+    Si calcular_matriz es False devuelve: (ecm, tasa_aciertos).
+    Si calcular_matriz es True  devuelve: (ecm, tasa_aciertos, matriz_confusion).
+    """
+    n_salidas = salidas_deseadas.shape[1]
+    n_patrones = len(entradas)
+    ecm_total = 0.0
+    aciertos = 0
+    mc = np.zeros((n_salidas, n_salidas),
+                  dtype=np.int32) if calcular_matriz else None
+
+    for p in range(n_patrones):
+        salida = red.CalcularSalida(entradas[p])
+        t = salidas_deseadas[p]
+
+        for k in range(n_salidas):
+            ecm_total += (t[k] - salida[k]) ** 2
+
+        clase_pred = int(np.argmax(salida))
+        clase_real = int(np.argmax(t))
+        if clase_pred == clase_real:
+            aciertos += 1
+        if calcular_matriz:
+            mc[clase_real, clase_pred] += 1
+
+    ecm = ecm_total / (n_patrones * n_salidas)
+    tasa = aciertos / n_patrones
+    return (ecm, tasa, mc) if calcular_matriz else (ecm, tasa)
+
+
+def retropropagacion(red: Red, entradas_train: np.ndarray,
+                     salidas_deseadas_train: np.ndarray,
+                     entradas_test: np.ndarray,
+                     salidas_deseadas_test: np.ndarray,
+                     alfa: float, epocas: int) -> tuple:
+    """
+    Entrena una red MLP de tres capas mediante el algoritmo de retropropagación
+    del error (backpropagation) con descenso por gradiente en línea (patrón a patrón).
+
+    Por cada época:
+      1. Para cada patrón de entrenamiento realiza feedforward y calcula:
+           - delta_k para cada neurona de salida: (t_k - y_k) * f'(y_k)
+           - delta_j para cada neurona oculta: (Σ delta_k * w_jk) * f'(z_j)
+           - Actualiza pesos y sesgos de la capa oculta.
+           - Actualiza pesos y sesgos de la capa de salida.
+      2. Evalúa ECM y tasa de aciertos sobre train y test,
+         almacenando los resultados en los historiales.
+
+    Al finalizar calcula las matrices de confusión finales sobre ambos conjuntos.
+
+    Devuelve: (historial_train, historial_test, mc_train, mc_test)
+      donde cada historial es una lista de tuplas (ecm, tasa) por época.
+    """
+    historial_train = []
+    historial_test = []
+
+    neuronas_ocultas = red.capas[1].neuronas
+    neuronas_salida = red.capas[2].neuronas
+
+    n_patrones = len(entradas_train)
+    n_ocultas = len(neuronas_ocultas)
+    n_salidas = len(neuronas_salida)
+
+    delta_k = np.empty(n_salidas)
+    delta_w_salida = np.empty((n_salidas, n_ocultas + 1))
+    idx_salida = {n: k for k, n in enumerate(neuronas_salida)}
+
+    for epoca in range(epocas):
+
+        for p in range(n_patrones):
+            patron = entradas_train[p]
+            t = salidas_deseadas_train[p]
+
+            red.CalcularSalida(patron)
+
+            for k in range(n_salidas):
+                n_k = neuronas_salida[k]
+                y_k = n_k.valor
+                delta_k[k] = (t[k] - y_k) * derivada_sigmoide_bipolar(y_k)
+                alfa_dk = alfa * delta_k[k]
+                delta_w_salida[k, 0] = alfa_dk                          # sesgo
+                for ci, c in enumerate(n_k.conexiones_entrantes):
+                    delta_w_salida[k, ci + 1] = alfa_dk * \
+                        c.neurona_origen.valor  # pesos
+
+            for j in range(n_ocultas):
+                delta_in_j = 0.0
+                for c in neuronas_ocultas[j].conexiones:
+                    delta_in_j += delta_k[idx_salida[c.neurona_destino]] * c.peso
+                z_j = neuronas_ocultas[j].valor
+                delta_j = delta_in_j * derivada_sigmoide_bipolar(z_j)
+                alfa_dj = alfa * delta_j
+                neuronas_ocultas[j].sesgo += alfa_dj
+                for c in neuronas_ocultas[j].conexiones_entrantes:
+                    c.peso += alfa_dj * c.neurona_origen.valor
+
+            for k in range(n_salidas):
+                n_k = neuronas_salida[k]
+                n_k.sesgo += delta_w_salida[k, 0]
+                for ci, c in enumerate(n_k.conexiones_entrantes):
+                    c.peso += delta_w_salida[k, ci + 1]
+
+        if epoca < epocas - 1:
+            historial_train.append(_evaluar_conjunto(
+                red, entradas_train, salidas_deseadas_train
+            ))
+            historial_test.append(_evaluar_conjunto(
+                red, entradas_test, salidas_deseadas_test
+            ))
+
+    # Última época: ECM, tasa y matriz de confusión en un único recorrido
+    ecm_tr, tasa_tr, mc_train = _evaluar_conjunto(
+        red, entradas_train, salidas_deseadas_train, calcular_matriz=True)
+    ecm_te, tasa_te, mc_test = _evaluar_conjunto(
+        red, entradas_test,  salidas_deseadas_test,  calcular_matriz=True)
+    historial_train.append((ecm_tr, tasa_tr))
+    historial_test.append((ecm_te, tasa_te))
+
+    return historial_train, historial_test, mc_train, mc_test
+
+
+def ejecutar_retropropagacion(datos: tuple, n_ocultas: int,
+                              alfa: float, epocas: int,
+                              peso_inicial_min: float = -0.5,
+                              peso_inicial_max: float = 0.5) -> tuple:
+    """
+    Construye y entrena una red MLP con retropropagación a partir de los datos
+    y los hiperparámetros indicados.
+
+    Arquitectura creada:
+        - Capa de entrada: tantas NeuronaEntrada como características en entradas_train.
+        - Capa oculta:     n_ocultas NeuronaSigmoide con sesgo aleatorio en
+                           [peso_inicial_min, peso_inicial_max].
+        - Capa de salida:  tantas NeuronaSigmoide como clases en salidas_train.
+    Los pesos de todas las conexiones se inicializan aleatoriamente en
+    [peso_inicial_min, peso_inicial_max].
+
+    Parámetros:
+        datos:             tupla (entradas_train, salidas_train, entradas_test, salidas_test).
+        n_ocultas:         número de neuronas en la capa oculta.
+        alfa:              tasa de aprendizaje.
+        epocas:            número máximo de épocas de entrenamiento.
+        peso_inicial_min:  límite inferior para la inicialización aleatoria de pesos/sesgos.
+        peso_inicial_max:  límite superior para la inicialización aleatoria de pesos/sesgos.
+
+    Devuelve: (historial_train, historial_test, mc_train, mc_test)
+    """
+    entradas_train, salidas_train, entradas_test, salidas_test = datos
+
+    n_entradas = entradas_train.shape[1]
+    n_clases = salidas_train.shape[1]
+
+    capa_entrada = Capa()
+    for _ in range(n_entradas):
+        capa_entrada.Añadir(NeuronaEntrada())
+
+    capa_oculta = Capa()
+    for _ in range(n_ocultas):
+        capa_oculta.Añadir(NeuronaSigmoide(
+            random.uniform(peso_inicial_min, peso_inicial_max)))
+
+    capa_salida = Capa()
+    for _ in range(n_clases):
+        capa_salida.Añadir(NeuronaSigmoide(
+            random.uniform(peso_inicial_min, peso_inicial_max)))
+
+    capa_entrada.Conectar(capa_oculta, peso_inicial_min, peso_inicial_max)
+    capa_oculta.Conectar(capa_salida, peso_inicial_min, peso_inicial_max)
+
+    red = Red()
+    red.Añadir(capa_entrada)
+    red.Añadir(capa_oculta)
+    red.Añadir(capa_salida)
+
+    historial_train, historial_test, mc_train, mc_test = retropropagacion(
+        red, entradas_train, salidas_train,
+        entradas_test, salidas_test, alfa, epocas
+    )
+
+    return historial_train, historial_test, mc_train, mc_test
