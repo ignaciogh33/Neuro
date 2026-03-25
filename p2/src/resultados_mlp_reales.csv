@@ -1,2 +1,2 @@
 Archivo,N_Ocultas,Alfa,Epocas,ECM_Train_Medio,Tasa_Train_Medio,ECM_Test_Medio,Tasa_Test_Medio
-problema_real2.txt,10,0.001,1000,0.1594,0.7763,0.1572,0.7911
+problema_real2.txt,10,0.05,500,0.1463,0.7875,0.1540,0.7732
