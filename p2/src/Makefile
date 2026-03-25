@@ -1,3 +1,9 @@
+ejecuta_problema_real2:
+	python perceptrones_multicapa.py --archivo problema_real2.txt -no 10 -a 0.05 -e 500
+	
+ejecuta_problema_real2_prediccion:
+	python perceptrones_multicapa.py -no 10 -a 0.05 -e 500 --prediccion problema_real2.txt problema_real2_no_etiquetados.txt
+
 ayuda_retro:
 	@echo "Funcion: ejecutar_retropropagacion(datos, n_ocultas, alfa, epocas, peso_inicial_min=-0.5, peso_inicial_max=0.5)"
 	@echo ""
