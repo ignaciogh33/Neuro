@@ -8,6 +8,7 @@ import pandas as pd
 
 def sigmoide_bipolar(x: float) -> float:
     """Función de activación sigmoide bipolar. Devuelve valores en el rango (-1, 1)."""
+    x = max(-500.0, min(500.0, x))
     return 2.0 / (1.0 + math.exp(-x)) - 1.0
 
 
@@ -520,6 +521,30 @@ def leer3(fichero_de_entrenamiento: str, fichero_de_test: str):
     return entradas_entrenamiento, salidas_entrenamiento, entradas_test, salidas_test
 
 
+def normalizar(entradas_train: np.ndarray, entradas_test: np.ndarray) -> tuple:
+    """
+    Normalización z-score de los atributos de entrada.
+    Calcula la media y desviación estándar de cada atributo a partir del
+    conjunto de entrenamiento y aplica la misma transformación a ambos
+    conjuntos (entrenamiento y test).
+
+    Para atributos con desviación estándar 0 (constantes), se deja el valor
+    centrado en la media sin dividir, evitando división por cero.
+
+    Devuelve: (entradas_train_norm, entradas_test_norm)
+    """
+    media = entradas_train.mean(axis=0)
+    desviacion = entradas_train.std(axis=0)
+
+    # Evitar división por cero en atributos constantes
+    desviacion[desviacion == 0] = 1.0
+
+    entradas_train_norm = (entradas_train - media) / desviacion
+    entradas_test_norm = (entradas_test - media) / desviacion
+
+    return entradas_train_norm, entradas_test_norm
+
+
 def _evaluar_conjunto(red: Red, entradas: np.ndarray,
                       salidas_deseadas: np.ndarray,
                       calcular_matriz: bool = False) -> tuple:
@@ -707,3 +732,181 @@ def ejecutar_retropropagacion(datos: tuple, n_ocultas: int,
     )
 
     return historial_train, historial_test, mc_train, mc_test
+
+
+def _sigmoide_bipolar_vec(x: np.ndarray) -> np.ndarray:
+    """Sigmoide bipolar vectorizada con protección contra overflow."""
+    x = np.clip(x, -500.0, 500.0)
+    return 2.0 / (1.0 + np.exp(-x)) - 1.0
+
+
+def _derivada_sigmoide_bipolar_vec(fx: np.ndarray) -> np.ndarray:
+    """Derivada de la sigmoide bipolar vectorizada, en función de su propia salida."""
+    return 0.5 * (1.0 + fx) * (1.0 - fx)
+
+
+def _evaluar_matricial(entradas, salidas_deseadas, W_oculta, b_oculta,
+                       W_salida, b_salida, calcular_matriz=False):
+    """Evaluación vectorizada de ECM, tasa de aciertos y matriz de confusión."""
+    n_clases = salidas_deseadas.shape[1]
+
+    z = _sigmoide_bipolar_vec(entradas @ W_oculta + b_oculta)
+    y = _sigmoide_bipolar_vec(z @ W_salida + b_salida)
+
+    ecm = np.mean((salidas_deseadas - y) ** 2)
+
+    clases_pred = np.argmax(y, axis=1)
+    clases_real = np.argmax(salidas_deseadas, axis=1)
+    tasa = np.mean(clases_pred == clases_real)
+
+    if calcular_matriz:
+        mc = np.zeros((n_clases, n_clases), dtype=np.int32)
+        for i in range(len(entradas)):
+            mc[clases_real[i], clases_pred[i]] += 1
+        return ecm, tasa, mc
+    return ecm, tasa
+
+
+def ejecutar_retropropagacion_matricial(datos: tuple, n_ocultas: int,
+                                        alfa: float, epocas: int,
+                                        peso_inicial_min: float = -0.5,
+                                        peso_inicial_max: float = 0.5,
+                                        tam_lote: int = 128) -> tuple:
+    """
+    Versión optimizada con mini-batch SGD usando operaciones matriciales NumPy.
+
+    Cada época baraja los datos y los procesa en mini-lotes de tamaño tam_lote.
+    Los pesos se actualizan una vez por lote con el gradiente medio del lote.
+    """
+    entradas_train, salidas_train, entradas_test, salidas_test = datos
+
+    n_entradas = entradas_train.shape[1]
+    n_clases = salidas_train.shape[1]
+    n_patrones = len(entradas_train)
+
+    W_oculta = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (n_entradas, n_ocultas))
+    b_oculta = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (1, n_ocultas))
+    W_salida = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (n_ocultas, n_clases))
+    b_salida = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (1, n_clases))
+
+    historial_train = []
+    historial_test = []
+
+    for epoca in range(epocas):
+        # Barajar datos cada época
+        indices = np.random.permutation(n_patrones)
+        X_shuf = entradas_train[indices]
+        T_shuf = salidas_train[indices]
+
+        # Procesar mini-lotes
+        for inicio in range(0, n_patrones, tam_lote):
+            X_b = X_shuf[inicio:inicio + tam_lote]
+            T_b = T_shuf[inicio:inicio + tam_lote]
+            b_size = len(X_b)
+
+            Z = _sigmoide_bipolar_vec(X_b @ W_oculta + b_oculta)
+            Y = _sigmoide_bipolar_vec(Z @ W_salida + b_salida)
+
+            delta_K = (T_b - Y) * _derivada_sigmoide_bipolar_vec(Y)
+            delta_J = (delta_K @ W_salida.T) * _derivada_sigmoide_bipolar_vec(Z)
+
+            factor = alfa / b_size
+            W_oculta += factor * (X_b.T @ delta_J)
+            b_oculta += factor * delta_J.sum(axis=0, keepdims=True)
+            W_salida += factor * (Z.T @ delta_K)
+            b_salida += factor * delta_K.sum(axis=0, keepdims=True)
+
+        if epoca < epocas - 1 and (epoca + 1) % 100 == 0:
+            historial_train.append(_evaluar_matricial(
+                entradas_train, salidas_train,
+                W_oculta, b_oculta, W_salida, b_salida))
+            historial_test.append(_evaluar_matricial(
+                entradas_test, salidas_test,
+                W_oculta, b_oculta, W_salida, b_salida))
+
+    ecm_tr, tasa_tr, mc_train = _evaluar_matricial(
+        entradas_train, salidas_train,
+        W_oculta, b_oculta, W_salida, b_salida, calcular_matriz=True)
+    ecm_te, tasa_te, mc_test = _evaluar_matricial(
+        entradas_test, salidas_test,
+        W_oculta, b_oculta, W_salida, b_salida, calcular_matriz=True)
+    historial_train.append((ecm_tr, tasa_tr))
+    historial_test.append((ecm_te, tasa_te))
+
+    return historial_train, historial_test, mc_train, mc_test
+
+
+def ejecutar_retropropagacion_matricial_con_pesos(datos: tuple, n_ocultas: int,
+                                                   alfa: float, epocas: int,
+                                                   peso_inicial_min: float = -0.5,
+                                                   peso_inicial_max: float = 0.5,
+                                                   tam_lote: int = 128) -> tuple:
+    """
+    Igual que ejecutar_retropropagacion_matricial pero también devuelve
+    las matrices de pesos entrenadas para poder realizar predicciones después.
+
+    Devuelve: ((W_oculta, b_oculta, W_salida, b_salida),
+               historial_train, historial_test, mc_train, mc_test)
+    """
+    entradas_train, salidas_train, entradas_test, salidas_test = datos
+
+    n_entradas = entradas_train.shape[1]
+    n_clases = salidas_train.shape[1]
+    n_patrones = len(entradas_train)
+
+    W_oculta = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (n_entradas, n_ocultas))
+    b_oculta = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (1, n_ocultas))
+    W_salida = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (n_ocultas, n_clases))
+    b_salida = np.random.uniform(peso_inicial_min, peso_inicial_max,
+                                 (1, n_clases))
+
+    historial_train = []
+    historial_test = []
+
+    for epoca in range(epocas):
+        indices = np.random.permutation(n_patrones)
+        X_shuf = entradas_train[indices]
+        T_shuf = salidas_train[indices]
+
+        for inicio in range(0, n_patrones, tam_lote):
+            X_b = X_shuf[inicio:inicio + tam_lote]
+            T_b = T_shuf[inicio:inicio + tam_lote]
+            b_size = len(X_b)
+
+            Z = _sigmoide_bipolar_vec(X_b @ W_oculta + b_oculta)
+            Y = _sigmoide_bipolar_vec(Z @ W_salida + b_salida)
+
+            delta_K = (T_b - Y) * _derivada_sigmoide_bipolar_vec(Y)
+            delta_J = (delta_K @ W_salida.T) * _derivada_sigmoide_bipolar_vec(Z)
+
+            factor = alfa / b_size
+            W_oculta += factor * (X_b.T @ delta_J)
+            b_oculta += factor * delta_J.sum(axis=0, keepdims=True)
+            W_salida += factor * (Z.T @ delta_K)
+            b_salida += factor * delta_K.sum(axis=0, keepdims=True)
+
+        if epoca < epocas - 1 and (epoca + 1) % 100 == 0:
+            historial_train.append(_evaluar_matricial(
+                entradas_train, salidas_train,
+                W_oculta, b_oculta, W_salida, b_salida))
+            historial_test.append(_evaluar_matricial(
+                entradas_test, salidas_test,
+                W_oculta, b_oculta, W_salida, b_salida))
+
+    ecm_tr, tasa_tr, mc_train = _evaluar_matricial(
+        entradas_train, salidas_train,
+        W_oculta, b_oculta, W_salida, b_salida, calcular_matriz=True)
+    ecm_te, tasa_te, mc_test = _evaluar_matricial(
+        entradas_test, salidas_test,
+        W_oculta, b_oculta, W_salida, b_salida, calcular_matriz=True)
+    historial_train.append((ecm_tr, tasa_tr))
+    historial_test.append((ecm_te, tasa_te))
+
+    return (W_oculta, b_oculta, W_salida, b_salida), historial_train, historial_test, mc_train, mc_test
