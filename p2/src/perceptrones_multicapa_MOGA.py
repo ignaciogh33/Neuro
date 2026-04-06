@@ -2,7 +2,7 @@ import os
 import csv
 import itertools
 import argparse
-from redes_neuronales import leer1, ejecutar_retropropagacion
+from redes_neuronales import leer1, ejecutar_retropropagacion, ejecutar_retropropagacion_matricial, normalizar
 
 # Configuración de los archivos de datos
 archivos = [
@@ -30,6 +30,9 @@ def main():
     parser.add_argument('-e', '--epocas', type=int, nargs='+', default=None, help='Lista de épocas')
     parser.add_argument('--archivo', type=str, default=None, help='Forzar ejecución sobre un solo archivo')
     parser.add_argument('--prediccion', nargs=2, metavar=('TRAIN', 'TEST'), help='Modo predicción: usar lectura 3 con [archivo_train] [archivo_test_no_etiquetado]')
+    parser.add_argument('--normalizacion', action='store_true', default=False, help='Aplicar normalización z-score a los atributos de entrada')
+    parser.add_argument('-p', '--porcentaje', type=float, default=0.8, help='Porcentaje de datos para entrenamiento (defecto: 0.8)')
+    parser.add_argument('-n', '--n_ejecuciones', type=int, default=5, help='Número de ejecuciones para promediar (defecto: 5)')
     args = parser.parse_args()
 
     n_ocultas_list = args.n_ocultas if args.n_ocultas else DEFAULT_N_OCULTAS
@@ -53,6 +56,10 @@ def main():
         
         datos_completos = leer3(ruta_train, ruta_test)
         entradas_train, salidas_train, entradas_test, _ = datos_completos # salidas_test no importa aquí
+
+        if args.normalizacion:
+            entradas_train, entradas_test = normalizar(entradas_train, entradas_test)
+            datos_completos = (entradas_train, salidas_train, entradas_test, _)
 
         # Coger el primer hiperparámetro introducido (o default)
         n_ocultas = n_ocultas_list[0]
@@ -145,11 +152,15 @@ def main():
                 
                 print(f"\n  Configuración: N_ocultas={n_ocultas}, Alfa={alfa}, Epocas={epocas}")
                 
-                for i in range(n_ejecuciones):
-                    # Dividir datos: 80% train, 20% test
-                    datos = leer1(ruta_archivo, 0.8)
-                    
-                    historial_train, historial_test, mc_train, mc_test = ejecutar_retropropagacion(
+                for i in range(args.n_ejecuciones):
+                    datos = leer1(ruta_archivo, args.porcentaje)
+
+                    if args.normalizacion:
+                        entradas_tr, salidas_tr, entradas_te, salidas_te = datos
+                        entradas_tr, entradas_te = normalizar(entradas_tr, entradas_te)
+                        datos = (entradas_tr, salidas_tr, entradas_te, salidas_te)
+
+                    historial_train, historial_test, mc_train, mc_test = ejecutar_retropropagacion_matricial(
                         datos, n_ocultas, alfa, epocas
                     )
                     
@@ -163,10 +174,10 @@ def main():
                     tasa_test_acum += tasa_test
                 
                 # Promediar
-                ecm_train_medio = ecm_train_acum / n_ejecuciones
-                tasa_train_medio = tasa_train_acum / n_ejecuciones
-                ecm_test_medio = ecm_test_acum / n_ejecuciones
-                tasa_test_medio = tasa_test_acum / n_ejecuciones
+                ecm_train_medio = ecm_train_acum / args.n_ejecuciones
+                tasa_train_medio = tasa_train_acum / args.n_ejecuciones
+                ecm_test_medio = ecm_test_acum / args.n_ejecuciones
+                tasa_test_medio = tasa_test_acum / args.n_ejecuciones
                 
                 # Guardar fila en CSV
                 writer.writerow([
