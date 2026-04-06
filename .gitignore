@@ -1,4 +1,5 @@
 *.tgz
 *.pdf
 .venv
+.vscode
 __pycache__
